@@ -24,6 +24,7 @@
 #include "app/IRController/IRController.h"
 #include "app/alarm_clock/alarm_clock.h"
 #include "app/compass/compass_app.h"
+#include "app/astute/astute_app.h"
 
 #if defined( NATIVE_64BIT )
     /**
@@ -70,6 +71,7 @@ void setup() {
     FindPhone_setup();
     wifimon_app_setup();
     calc_app_setup();
+    astute_app_setup();
     kodi_remote_app_setup();
     /**
      * post hardware setup

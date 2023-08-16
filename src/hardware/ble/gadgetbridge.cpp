@@ -299,6 +299,7 @@ static void gadgetbridge_send_chunk ( unsigned char *msg, int32_t len ) {
  * @return false 
  */
 static bool gadgetbridge_powermgm_loop_cb( EventBits_t event, void *arg ) {
+
     static uint64_t nextmillis = 0;
     /**
      * check if we connected

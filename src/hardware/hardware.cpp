@@ -31,7 +31,7 @@
     #define SDL_MAIN_HANDLED        /*To fix SDL's "undefined reference to WinMain" issue*/
     #include <SDL2/SDL.h>
     #include "utils/logging.h"
-
+    #include "tcp/tcp.h"
     /**
      * A task to measure the elapsed time for LittlevGL
      * @param data unused
@@ -274,6 +274,9 @@ void hardware_setup( void ) {
 
     splash_screen_stage_update( "init gui", 80 );
     splash_screen_stage_finish();
+#ifdef NATIVE_64BIT
+    tcp_setup();
+#endif
 }
 
 void hardware_post_setup( void ) {
