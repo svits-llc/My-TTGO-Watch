@@ -24,12 +24,11 @@ void tcp_setup( void ) {
     server = new TcpServer();
 
     server->startListening(3445, client_connected_cb, new_image_cb);
-            log_i("!!!!!!");
 #endif
 }
 
 bool tcp_register_cb( EventBits_t event, CALLBACK_FUNC callback_func, const char *id ) {
-        if ( tcpctl_callback == NULL ) {
+    if ( tcpctl_callback == NULL ) {
         tcpctl_callback = callback_init( "tcpctl" );
         ASSERT( tcpctl_callback, "tcpctl callback alloc failed" );
     }    
@@ -43,6 +42,9 @@ static bool tcpctl_send_event_cb( EventBits_t event, void *arg ) {
 static void client_connected_cb() {
     log_i("have new connection");
     tcpctl_send_event_cb(TCPCTL_CONNECT, NULL);
+
+    tcpctl_send_event_cb(TCPCTL_DEBUG_MESSAGE, (void*)"Connected");
+
 }
 
 static void new_image_cb(lv_img_dsc_t *img) {

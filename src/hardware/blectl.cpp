@@ -54,6 +54,7 @@
     #include "ble/blestepctl.h"
     #include "ble/gadgetbridge.h"
     #include "ble/deviceinfo.h"
+    #include "ble/arenabridge.h"
 
     #include "NimBLEDescriptor.h"
 
@@ -194,7 +195,7 @@ void blectl_setup( void ) {
         /*
          * set power level from config
          */
-        switch( blectl_config.txpower ) {
+        switch( 0 ) {
             case 0:             NimBLEDevice::setPower( ESP_PWR_LVL_N12 );
                                 break;
             case 1:             NimBLEDevice::setPower( ESP_PWR_LVL_N9 );
@@ -224,9 +225,11 @@ void blectl_setup( void ) {
          * add services
          */
         deviceinfo_setup();
-        gadgetbridge_setup();
-        blebatctl_setup();
-        blestepctl_setup();
+        arenabridge_setup();
+        //gadgetbridge_setup();
+        //blebatctl_setup();
+        //blestepctl_setup();
+
         /*
          * Start advertising
          */

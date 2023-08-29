@@ -9,6 +9,7 @@
     #define TCPCTL_CONNECT               _BV(0)         /** @brief event mask for tcpctl connect to an client */
     #define TCPCTL_DISCONNECT            _BV(1)         /** @brief event mask for tcpctl disconnect */
     #define TCPCTL_NEW_IMAGE             _BV(2)         
+    #define TCPCTL_DEBUG_MESSAGE         _BV(3)         
 
 
 void tcp_setup( void );
