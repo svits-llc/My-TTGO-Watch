@@ -5,8 +5,12 @@
 #include <netinet/in.h>
 #include <unistd.h>
 #include <cstring> 
+#include <memory>
+#include <vector>
+#include <functional>
 
 #include <iostream>
+#include "../../astute.arena/AstuteDecode.h"
 
 lv_img_dsc_t img_data;
 
@@ -27,6 +31,20 @@ void serverHandler(int serverSocket, TcpServer *server) {
             server->haveNewConnection(clientSocket);
     }
 }
+
+struct SLocal {
+    static void Receiver(void* cookie, size_t offset, size_t count, uint16_t* pix)
+    {
+        SLocal* pSelf = reinterpret_cast<SLocal*>(cookie);
+        size_t size = offset + count;
+        if (size > pSelf->res.size())
+        {
+            pSelf->res.resize(size);
+        }
+        memcpy(&pSelf->res[offset], pix, count * sizeof(uint16_t));
+    }
+    std::vector<uint16_t> res;
+} local;
 
 
 TcpServer::TcpServer()
@@ -142,13 +160,34 @@ void TcpServer::haveNewConnection(int clientSocket)
 
             std::cout << "received " << bbytesReceived << std::endl;
 
-            img_data.data = (uint8_t *)imageBuffer;
-            img_data.data_size = 240*240*4;
+            AWDecoder decoder = {};
+
+            aw_decoder_init(&decoder, SLocal::Receiver, &local);
+            int len = imageBufferSize;
+
+            while (len)
+            {
+                size_t left = AW_BUFF_SIZE - decoder.filled;
+                size_t size = len < left ? len : left;
+
+                memcpy(decoder.buff + decoder.filled, imageBuffer, size);
+                decoder.filled += size;
+
+                aw_decoder_chunk(&decoder);
+                len -= size;
+                imageBuffer = (char*)imageBuffer + size;
+            }
+
+            aw_decoder_fini(&decoder);
+
+
+            img_data.data = (uint8_t *)local.res.data();
+            img_data.data_size = 240*240*2;
             img_data.header.cf = LV_IMG_CF_TRUE_COLOR_CHROMA_KEYED;
 
             _new_image_calb(&img_data);
 
-            free(imageBuffer);
+           // free(imageBuffer);
            // free(img_data); !!! MEMORY LEAK
 
         }

@@ -5,6 +5,7 @@
 #include "hardware/pmu.h"
 #include "hardware/powermgm.h"
 #include "utils/alloc.h"
+#include "../../astute.arena/AstuteDecode.h"
 
 
 callback_t *arenatl_callback = NULL;         /** @brief tcpctl callback structure */
@@ -31,13 +32,24 @@ static bool arena_send_event_cb( EventBits_t event, void *arg );
     NimBLECharacteristic *pArenabridgeRXCharacteristic = NULL;         /** @brief RX Characteristic */
     lv_img_dsc_t img_data;
 
-    
-#endif
-
-
 #define NEW_FILE (unsigned char)1
 #define CHUNK (unsigned char)2
 #define LAST_CHUNK (unsigned char)4
+
+struct SLocal {
+    static void Receiver(void* cookie, size_t offset, size_t count, uint16_t* pix)
+    {
+        SLocal* pSelf = reinterpret_cast<SLocal*>(cookie);
+        size_t size = offset + count;
+        if (size > pSelf->res.size())
+        {
+            pSelf->res.resize(size);
+        }
+        memcpy(&pSelf->res[offset], pix, count * sizeof(uint16_t));
+    }
+    std::vector<uint16_t> res;
+} local;
+
 
 void *imageBuffer;
 int imageBufferSize;
@@ -118,14 +130,34 @@ public:
             
         }
             break;
-        case LAST_CHUNK:
+        case LAST_CHUNK: {
             if (imageBuffer == NULL) {
                 return;
             }
             memcpy(imageBuffer + imageOffset, pCharacteristic->getValue().data() + offset, messageSize - offset);
             imageOffset += messageSize - offset;
 
-            img_data.data = (uint8_t *)imageBuffer;
+            AWDecoder decoder = {};
+
+            aw_decoder_init(&decoder, SLocal::Receiver, &local);
+            int len = imageBufferSize;
+            while (len)
+            {
+                size_t left = AW_BUFF_SIZE - decoder.filled;
+                size_t size = len < left ? len : left;
+
+                memcpy(decoder.buff + decoder.filled, imageBuffer, size);
+                decoder.filled += size;
+
+                aw_decoder_chunk(&decoder);
+                len -= size;
+                imageBuffer = (char*)imageBuffer + size;
+            }
+            aw_decoder_fini(&decoder);
+
+
+
+            img_data.data = (uint8_t *)local.res.data();
             img_data.data_size = imageBufferSize;
             img_data.header.cf = LV_IMG_CF_TRUE_COLOR;
             img_data.header.always_zero = 0;
@@ -133,6 +165,7 @@ public:
             log_i("!!!!!LAST CHUNK");
             arena_send_event_cb(BLECTL_NEW_IMAGE, (void*) &img_data);
             // move to render!!!!
+        }
             break;
         default:
             log_e("unsupported chunk format");
@@ -144,6 +177,7 @@ public:
 };
 
 static ArenaCharacteristicCallbacks arenabridge_callb;
+#endif
 
 void arenabridge_setup( void ) {
 
