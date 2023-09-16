@@ -76,12 +76,11 @@ public:
 
     };
     void onWrite(NimBLECharacteristic* pCharacteristic) {
-        
+        log_i("==new_chunk");
         int messageSize =  pCharacteristic->getValue().length();
         if (messageSize <= 0) {
             return;
         }
-        
         int offset = 0;
 
         unsigned char type;
@@ -92,7 +91,7 @@ public:
         switch (type)
         {
         case NEW_FILE: {
-            log_i("!!!!!!start recive new file");
+            log_i("==start_upload_file");
 
             if (imageBuffer != NULL) {
                 free(imageBuffer);
@@ -131,6 +130,7 @@ public:
         }
             break;
         case LAST_CHUNK: {
+            log_i("==last_chunk");
             if (imageBuffer == NULL) {
                 return;
             }
@@ -139,6 +139,7 @@ public:
 
             AWDecoder decoder = {};
 
+            log_i("==aw_decoder_init");
             aw_decoder_init(&decoder, SLocal::Receiver, &local);
             int len = imageBufferSize;
             while (len)
@@ -154,6 +155,7 @@ public:
                 imageBuffer = (char*)imageBuffer + size;
             }
             aw_decoder_fini(&decoder);
+            log_i("==aw_decoder_fini");
 
 
 
@@ -162,8 +164,15 @@ public:
             img_data.header.cf = LV_IMG_CF_TRUE_COLOR;
             img_data.header.always_zero = 0;
             
-            log_i("!!!!!LAST CHUNK");
+            log_i("==start_draw");
             arena_send_event_cb(BLECTL_NEW_IMAGE, (void*) &img_data);
+            log_i("==end_draw");
+
+            log_i("==start_send_notify");
+            pArenabridgeTXCharacteristic->setValue((void*)"ratatata");
+            pArenabridgeTXCharacteristic->notify();
+            log_i("==end_send_notify");
+
             // move to render!!!!
         }
             break;
@@ -193,9 +202,9 @@ void arenabridge_setup( void ) {
         /**
          * Create Arenabridge TX/RX Characteristic
          */
-        pArenabridgeTXCharacteristic = pArenabridgeService->createCharacteristic( NimBLEUUID( ARENABRIDGE_CHARACTERISTIC_UUID_TX ), NIMBLE_PROPERTY::NOTIFY | NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::READ );
+        pArenabridgeTXCharacteristic = pArenabridgeService->createCharacteristic( NimBLEUUID( ARENABRIDGE_CHARACTERISTIC_UUID_TX ), NIMBLE_PROPERTY::NOTIFY | NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::INDICATE );
         pArenabridgeTXCharacteristic->addDescriptor( new NimBLE2904() );
-        pArenabridgeRXCharacteristic = pArenabridgeService->createCharacteristic( NimBLEUUID( ARENABRIDGE_CHARACTERISTIC_UUID_RX ), NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::READ );
+        pArenabridgeRXCharacteristic = pArenabridgeService->createCharacteristic( NimBLEUUID( ARENABRIDGE_CHARACTERISTIC_UUID_RX ), NIMBLE_PROPERTY::WRITE  | NIMBLE_PROPERTY::WRITE_NR);
         pArenabridgeRXCharacteristic->setCallbacks( &arenabridge_callb );
         pArenabridgeService->start();
         /**

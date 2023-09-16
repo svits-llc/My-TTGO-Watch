@@ -212,8 +212,9 @@ void blectl_setup( void ) {
         /*
          * Enable encryption and pairing options
          */
-        NimBLEDevice::setSecurityAuth( true, true, true );
+        //NimBLEDevice::setSecurityAuth( true, true, true );
         NimBLEDevice::setSecurityIOCap( BLE_HS_IO_DISPLAY_ONLY );
+        NimBLEDevice::setMTU(512);
         /*
          * Create the BLE Server
          */
