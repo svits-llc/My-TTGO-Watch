@@ -5,7 +5,7 @@
 #include "hardware/pmu.h"
 #include "hardware/powermgm.h"
 #include "utils/alloc.h"
-#include "../../astute.arena/AstuteDecode.h"
+#include "../../astute-compression/AstuteDecode.h"
 
 
 callback_t *arenatl_callback = NULL;         /** @brief tcpctl callback structure */
@@ -76,7 +76,6 @@ public:
 
     };
     void onWrite(NimBLECharacteristic* pCharacteristic) {
-        log_i("==new_chunk");
         int messageSize =  pCharacteristic->getValue().length();
         if (messageSize <= 0) {
             return;
@@ -141,21 +140,29 @@ public:
 
             log_i("==aw_decoder_init");
             aw_decoder_init(&decoder, SLocal::Receiver, &local);
+            log_i("==aw_decoder_finished");
+
             int len = imageBufferSize;
             while (len)
             {
-                size_t left = AW_BUFF_SIZE - decoder.filled;
-                size_t size = len < left ? len : left;
+                size_t left = 0;
+                void* tail = aw_get_tail(&decoder, left);
+                assert(left);
 
-                memcpy(decoder.buff + decoder.filled, imageBuffer, size);
+                size_t size = len < left ? len : left;
+                memcpy(tail, imageBuffer, size);
                 decoder.filled += size;
 
-                aw_decoder_chunk(&decoder);
+                int decode_res = aw_decoder_chunk(&decoder);
+                assert(0 == decode_res);
                 len -= size;
                 imageBuffer = (char*)imageBuffer + size;
+                log_i("decoder.filled %d left %d size %d", decoder.filled, left, size);
             }
+            
+            log_i("==aw_decoder_fini_start");
             aw_decoder_fini(&decoder);
-            log_i("==aw_decoder_fini");
+            log_i("==aw_decoder_fini_finish");
 
 
 

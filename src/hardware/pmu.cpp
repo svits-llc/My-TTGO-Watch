@@ -428,7 +428,7 @@ void pmu_loop( void ) {
         static bool charging = pmu_is_charging();
         static bool battery = percent > 0 ? true : false;
 
-        if ( temp_pmu_irq_flag ) {
+        if ( false ) {
             if ( charging != pmu_is_charging() ) {
                 charging = pmu_is_charging();
                 pmu_update = true;

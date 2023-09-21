@@ -214,7 +214,7 @@ void blectl_setup( void ) {
          */
         //NimBLEDevice::setSecurityAuth( true, true, true );
         NimBLEDevice::setSecurityIOCap( BLE_HS_IO_DISPLAY_ONLY );
-        NimBLEDevice::setMTU(512);
+        NimBLEDevice::setMTU(247);
         /*
          * Create the BLE Server
          */
