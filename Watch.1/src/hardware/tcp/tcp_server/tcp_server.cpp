@@ -134,6 +134,8 @@ void TcpServer::haveNewConnection(int clientSocket)
             close(clientSocket);
             return;
         } else {
+            std::cout << "!!!!!!!!!!!!!!!!!!!!!!received " << bytesReceived << std::endl;
+
            // img_data = (lv_img_dsc_t*)malloc(sizeof(lv_img_dsc_t));
             int bufSize = sizeof(int);
 
@@ -144,11 +146,11 @@ void TcpServer::haveNewConnection(int clientSocket)
 
             memcpy(&(imageWidh), headBuffer + offset, bufSize);
             offset += bufSize;
-            img_data.header.w = imageWidh;
+            img_data.header.w = htonl(imageWidh);
 
             memcpy(&(imageHeight), headBuffer + offset, bufSize);
             offset += bufSize;
-            img_data.header.h = imageHeight;
+            img_data.header.h = htonl(imageHeight);
 
             std::cout << "message size " << messageSize << " image width " <<  imageWidh << " image heigth " << imageHeight << std::endl;
             int imageBufferSize = messageSize - (int)sizeof(headBuffer);
@@ -165,6 +167,7 @@ void TcpServer::haveNewConnection(int clientSocket)
             aw_decoder_init(&decoder, SLocal::Receiver, &local);
             int len = imageBufferSize;
 
+/*
             while (len)
             {
                 size_t left = AW_BUFF_SIZE - decoder.filled;
@@ -180,10 +183,14 @@ void TcpServer::haveNewConnection(int clientSocket)
 
             aw_decoder_fini(&decoder);
 
-
-            img_data.data = (uint8_t *)local.res.data();
-            img_data.data_size = 240*240*2;
-            img_data.header.cf = LV_IMG_CF_TRUE_COLOR_CHROMA_KEYED;
+*/
+            for (int i = 0; i < 3*50; i+=3) {
+                std::cout << int(*(uint8_t *)(imageBuffer + i)) << int(*(uint8_t *)(imageBuffer + i + 1)) << int(*(uint8_t *)(imageBuffer + i + 2))<< std::endl;
+            } 
+            img_data.data = (uint8_t *)imageBuffer;//(uint8_t *)local.res.data();
+            img_data.data_size = 240*240*3;
+            img_data.header.cf = LV_IMG_CF_TRUE_COLOR_ALPHA;
+            img_data.header.always_zero = 0;
 
             _new_image_calb(&img_data);
 

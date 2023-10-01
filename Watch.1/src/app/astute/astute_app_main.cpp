@@ -37,7 +37,7 @@ void astute_app_main_setup( uint32_t tile_num ) {
 
     astute_app_main_tile = mainbar_get_tile_obj( tile_num );    
     img_obj = lv_img_create(astute_app_main_tile, NULL);
-
+    lv_img_set_src(img_obj, &astute_app_64px);
 
 
     // debug label
