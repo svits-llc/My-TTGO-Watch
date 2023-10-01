@@ -3,7 +3,7 @@
 #include "hardware/blectl.h"
 #include "TWatch_hal.h"
 
-#include "astute-compression/AstuteDecode.h"
+#include "../../../astute-compression/AstuteDecode.h"
 
 static bool arena_send_event_cb( EventBits_t event, void *arg );
 void *_imgPtr;
