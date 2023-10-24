@@ -4,23 +4,16 @@
 #include "TWatch_hal.h"
 
 #include "../../../astute-compression/AstuteDecode.h"
+#include "../../../astute-compression/aw_profile.hpp"
 
 static bool arena_send_event_cb( EventBits_t event, void *arg );
 void *_imgPtr;
-#ifdef NATIVE_64BIT
-#else
-    #if defined( M5PAPER )
-    #elif defined( M5CORE2 )
-    #elif defined( LILYGO_WATCH_2020_V1 ) || defined( LILYGO_WATCH_2020_V2 ) || defined( LILYGO_WATCH_2020_V3 )
-    #elif defined( LILYGO_WATCH_2021 )
-    #elif defined( WT32_SC01 )
-    #else
-        #warning "no hardware driver for blearenabridge"
-    #endif
 
     #include <Arduino.h>
     #include "NimBLEDescriptor.h"
 
+#include <iostream>
+#include <sstream>
 
     NimBLECharacteristic *pArenabridgeTXCharacteristic = NULL;         /** @brief TX Characteristic */
     NimBLECharacteristic *pArenabridgeRXCharacteristic = NULL;         /** @brief RX Characteristic */
@@ -29,6 +22,18 @@ void *_imgPtr;
 #define NEW_FILE (unsigned char)1
 #define CHUNK (unsigned char)2
 #define LAST_CHUNK (unsigned char)4
+#define SEND_DEBUG_INFO (unsigned char)8
+
+
+
+#define RECIVE_UPDATE (unsigned char)1
+#define START_RESIVE_DEBUG_HEADER (unsigned char)2
+#define RESIVE_DEBUG_DH_CHUNK (unsigned char)3
+#define END_RESIVE_DEBUG_HEADER (unsigned char)4
+
+#define START_RESIVE_DEBUG_DATA (unsigned char)5
+#define RESIVE_DEBUG_DATA_CHUNL (unsigned char)6
+#define END_RESIVE_DEBUG_DATA (unsigned char)7
 
 struct SLocal {
     static void Receiver(void* cookie, size_t offset, size_t count, uint16_t* pix)
@@ -42,12 +47,8 @@ struct SLocal {
         memcpy(&pSelf->res[offset], pix, count * sizeof(uint16_t));
     }
     std::vector<uint16_t> res;
-} local;
+};
 
-
-void *imageBuffer;
-int imageBufferSize;
-int imageOffset;
 class ArenaCharacteristicCallbacks: public NimBLECharacteristicCallbacks {
 
     int imageWidh;
@@ -55,151 +56,157 @@ class ArenaCharacteristicCallbacks: public NimBLECharacteristicCallbacks {
 public:
     ArenaCharacteristicCallbacks()
     :  NimBLECharacteristicCallbacks() {
-        imageBuffer = NULL;
-        imageBufferSize = 0;
-        imageOffset = 0;
+
     }
 
-    void onRead(NimBLECharacteristic* pCharacteristic){
-        size_t msgLen = pCharacteristic->getValue().length();
 
-        std::string msg = pCharacteristic->getValue();
-        //arena_send_event_cb(BLECTL_DEBUG_MESSAGE, (void*)msg.c_str());
-    
-        log_i("onRead: Have new message with size: %d", msgLen);
-
-    };
     
     void onWrite(NimBLECharacteristic* pCharacteristic) {
         int messageSize =  pCharacteristic->getValue().length();
+
         if (messageSize <= 0) {
             return;
         }
         int offset = 0;
 
         unsigned char type;
-        int bufSize = sizeof(unsigned char);
-        memcpy(&(type), (void *)pCharacteristic->getValue().data(), bufSize);
-        offset += bufSize;
-        //printf("%d Have new chunk!!!!! \n",  millis());
+
+        memcpy(&type, pCharacteristic->getValue().data(), sizeof(type));
+        offset += sizeof(type);
+
 
         switch (type)
         {
         case NEW_FILE: {
-            log_i("%d==start_upload_file", millis());
-
-            if (imageBuffer != NULL) {
-                //free(imageBuffer);
-                imageBufferSize = 0;
-                imageBuffer = NULL;
-                imageOffset = 0;
-            }
-
+            AW_PROFILE_SCOPE("NEW_FILE");
+            int fileSize = 0;
             int bufSize = sizeof(int);
-
-            memcpy(&(imageBufferSize), pCharacteristic->getValue().data() + offset, bufSize);
+            memcpy(&fileSize, pCharacteristic->getValue().data() + offset, bufSize);
             offset += bufSize;
 
-            memcpy(&(imageWidh), pCharacteristic->getValue().data() + offset, bufSize);
+            memcpy(&imageWidh, pCharacteristic->getValue().data() + offset, bufSize);
             offset += bufSize;
             img_data.header.w = imageWidh;
 
-            memcpy(&(imageHeight), pCharacteristic->getValue().data() + offset, bufSize);
+            memcpy(&imageHeight, pCharacteristic->getValue().data() + offset, bufSize);
             offset += bufSize;
             img_data.header.h = imageHeight;
 
-            imageBuffer = malloc(imageBufferSize);
-            memcpy(imageBuffer + imageOffset, pCharacteristic->getValue().data() + offset, messageSize - offset);
-            imageOffset += messageSize - offset;
-            log_i("Image width: %d, height %d, size %d", imageWidh, imageHeight, imageBufferSize);
+
+            aw_decoder_init(&_decoder, SLocal::Receiver, &_local);
+            _decode((uint8_t *)(pCharacteristic->getValue().data() + offset), messageSize - offset);
 
             break;
         }
         case CHUNK: {
-            if (imageBuffer == NULL) {
-                return;
-            }
-            memcpy(imageBuffer + imageOffset, pCharacteristic->getValue().data() + offset, messageSize - offset);
-            imageOffset += messageSize - offset;
-            
+            AW_PROFILE_SCOPE("CHUNK");
+            _decode((uint8_t *)(pCharacteristic->getValue().data() + offset), messageSize - offset);
         }
             break;
         case LAST_CHUNK: {
-            log_i("%d ==last_chunk", millis());
-            if (imageBuffer == NULL) {
-                return;
-            }
-            memcpy(imageBuffer + imageOffset, pCharacteristic->getValue().data() + offset, messageSize - offset);
-            imageOffset += messageSize - offset;
+            AW_PROFILE_SCOPE("LAST_CHUNK");
 
+            _decode((uint8_t *)(pCharacteristic->getValue().data() + offset), messageSize - offset);
 
-            AWDecoder decoder = {};
+            aw_decoder_fini(&_decoder, false);
 
-            log_i("==aw_decoder_init");
-            aw_decoder_init(&decoder, SLocal::Receiver, &local);
-            log_i("==aw_decoder_finished");
-
-            int len = imageBufferSize;
-            while (len)
-            {
-                size_t left = 0;
-                void* tail = aw_get_tail(&decoder, left);
-                //assert(left);
-
-                size_t size = len < left ? len : left;
-                memcpy(tail, imageBuffer, size);
-                decoder.filled += size;
-
-                int decode_res = aw_decoder_chunk(&decoder);
-                assert(0 == decode_res);
-                len -= size;
-                imageBuffer = (char*)imageBuffer + size;
-                //log_i("decoder.filled %d left %d size %d", decoder.filled, left, size);
-                log_i("----res.size %d", local.res.size());
-            }
-            
-            log_i("==aw_decoder_fini_start");
-            aw_decoder_fini(&decoder, false);
-            log_i("==aw_decoder_fini_finish");
-
-
-            log_i("!!!!res.size %d", local.res.size());
-
-            img_data.data = (uint8_t *)local.res.data();
-            img_data.data_size = 240*240*2;
-            img_data.header.cf = LV_IMG_CF_TRUE_COLOR;
-            img_data.header.always_zero = 0;
-            
-            /*log_i("==start_draw");
-            arena_send_event_cb(BLECTL_NEW_IMAGE, (void*) &img_data);
-            log_i("==end_draw");
-
-*/
-
-            // move to render!!!!
-            log_i("Try show image");
-            lv_img_set_src((lv_obj_t*)_imgPtr, &img_data);
-            //free(imageBuffer);
-
-
-            log_i("==start_send_notify");
-            pArenabridgeTXCharacteristic->setValue((void*)"ratatata");
+            _paint();
+            unsigned char header[1];
+            header[0] = RECIVE_UPDATE;
+            pArenabridgeTXCharacteristic->setValue(header, 1);
             pArenabridgeTXCharacteristic->notify();
-            log_i("==end_send_notify");
         }
             break;
+        case SEND_DEBUG_INFO: {
+            log_i("Waiting debug information");
+            std::ostringstream headers;
+            std::ostringstream file;
+
+            CProfileFunction::GetProfiler().PrintHeader(headers);
+            CProfileFunction::GetProfiler().BlobToText(file);
+            printf("Headers: \n %s \n", headers.str().c_str());
+            printf("Data: \n %s \n", file.str().c_str());
+
+            _sendDebugHeader(headers.str());
+            _sendDebugData(file.str());            
+        }
+        break;
         default:
             log_e("unsupported chunk format");
             break;
-        }
-    
-        //log_i("onWrite: Have new message with size: %d total: %d count: %d type %d", messageSize, sended_data, count, type);
-   
+        }   
     }
+    private:
+
+    void _decode(uint8_t *buffer, size_t len) {
+        AW_PROFILE_SCOPE("decode");
+        while (len)
+            {
+                size_t left = 0;
+                void* tail = aw_get_tail(&_decoder, left);
+                //assert(left);
+
+                size_t size = len < left ? len : left;
+                memcpy(tail, buffer, size);
+                _decoder.filled += size;
+
+                int decode_res = aw_decoder_chunk(&_decoder);
+                assert(0 == decode_res);
+                len -= size;
+                buffer = (uint8_t*)buffer + size;
+            }
+    }
+
+    void _paint() {
+            AW_PROFILE_SCOPE("paint");
+            img_data.data = (uint8_t *)_local.res.data();
+            img_data.data_size = img_data.header.w * img_data.header.h * 2;
+            img_data.header.cf = LV_IMG_CF_TRUE_COLOR;
+            img_data.header.always_zero = 0;
+            
+            // move to render!!!!
+            lv_img_set_src((lv_obj_t*)_imgPtr, &img_data);
+    }
+
+    void _sendDebugHeader(std::string str) {
+        int chunk = 243;
+        int bufSize = str.size();
+        for (int i = 0; i < bufSize; i += chunk) {
+            int remainingSize = bufSize - i;
+            int chunkLength = remainingSize < chunk ? remainingSize : chunk;
+            
+            uint8_t * chunkData = (uint8_t *)malloc(chunkLength + 1);
+
+            chunkData[0] =  i == 0 ? START_RESIVE_DEBUG_HEADER : (remainingSize < chunk ? END_RESIVE_DEBUG_HEADER : RESIVE_DEBUG_DH_CHUNK);
+            memcpy(chunkData + 1, str.substr(i, chunkLength).c_str(), chunkLength);
+
+            pArenabridgeTXCharacteristic->setValue(chunkData, chunkLength + 1);
+            pArenabridgeTXCharacteristic->notify();
+        }
+    }
+
+    void _sendDebugData(std::string str) {
+        int chunk = 243;
+        int bufSize = str.size();
+        for (int i = 0; i < bufSize; i += chunk) {
+            int remainingSize = bufSize - i;
+            int chunkLength = remainingSize < chunk ? remainingSize : chunk;
+            
+            uint8_t * chunkData = (uint8_t *)malloc(chunkLength + 1);
+
+            chunkData[0] =  i == 0 ? START_RESIVE_DEBUG_DATA : (remainingSize < chunk ? END_RESIVE_DEBUG_DATA : RESIVE_DEBUG_DATA_CHUNL);
+            memcpy(chunkData + 1, str.substr(i, chunkLength).c_str(), chunkLength);
+
+            pArenabridgeTXCharacteristic->setValue(chunkData, chunkLength + 1);
+            pArenabridgeTXCharacteristic->notify();
+        }
+    }
+    SLocal _local;
+    AWDecoder _decoder = {};
+
 };
 
 static ArenaCharacteristicCallbacks arenabridge_callb;
-#endif
 
 void arenabridge_setup( void *imagePtr ) {
     _imgPtr = imagePtr;
