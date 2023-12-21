@@ -3,8 +3,8 @@
 #include "hardware/blectl.h"
 #include "TWatch_hal.h"
 
-#include "../../../astute-compression/AstuteDecode.h"
-#include "../../../astute-compression/aw_profile.hpp"
+#include "../../lib/astute-compression/AstuteDecode.h"
+#include "../../lib/astute-compression/aw_profile.hpp"
 
 static bool arena_send_event_cb( EventBits_t event, void *arg );
 void *_imgPtr;
@@ -142,8 +142,9 @@ public:
         AW_PROFILE_SCOPE("decode");
         while (len)
             {
+                log_i("decoder cap is %d", _decoder.header.cap);
                 size_t left = 0;
-                void* tail = aw_get_tail(&_decoder, left);
+                void* tail = aw_get_tail(&_decoder, &left);
                 //assert(left);
 
                 size_t size = len < left ? len : left;
@@ -151,6 +152,7 @@ public:
                 _decoder.filled += size;
 
                 int decode_res = aw_decoder_chunk(&_decoder);
+                log_i("decode_res is %d", decode_res);
                 assert(0 == decode_res);
                 len -= size;
                 buffer = (uint8_t*)buffer + size;
