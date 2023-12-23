@@ -36,6 +36,10 @@ void *_imgPtr;
 #define END_RESIVE_DEBUG_DATA (unsigned char)7
 
 struct SLocal {
+    //SLocal() {
+    //    res.resize(240*240);
+    //    log_i("memory occupy succeed!");
+    //}
     static void Receiver(void* cookie, size_t offset, size_t count, uint16_t* pix)
     {
         SLocal* pSelf = reinterpret_cast<SLocal*>(cookie);
@@ -56,7 +60,7 @@ class ArenaCharacteristicCallbacks: public NimBLECharacteristicCallbacks {
 public:
     ArenaCharacteristicCallbacks()
     :  NimBLECharacteristicCallbacks() {
-
+        //_paint_qr();
     }
 
 
@@ -140,7 +144,9 @@ public:
 
     void _decode(uint8_t *buffer, size_t len) {
         AW_PROFILE_SCOPE("decode");
-        while (len)
+        int decode_res = aw_data_chunk(&_decoder, len, buffer);
+        assert(decode_res == 0);
+        /*while (len)
             {
                 log_i("decoder cap is %d", _decoder.header.cap);
                 size_t left = 0;
@@ -151,16 +157,32 @@ public:
                 memcpy(tail, buffer, size);
                 _decoder.filled += size;
 
-                int decode_res = aw_decoder_chunk(&_decoder);
+                //int decode_res = aw_decoder_chunk(&_decoder);
                 log_i("decode_res is %d", decode_res);
                 assert(0 == decode_res);
                 len -= size;
                 buffer = (uint8_t*)buffer + size;
             }
+            */
     }
 
     void _paint() {
             AW_PROFILE_SCOPE("paint");
+            img_data.data = (uint8_t *)_local.res.data();
+            img_data.data_size = img_data.header.w * img_data.header.h * 2;
+            img_data.header.cf = LV_IMG_CF_TRUE_COLOR;
+            img_data.header.always_zero = 0;
+            
+            // move to render!!!!
+            lv_img_set_src((lv_obj_t*)_imgPtr, &img_data);
+    }
+
+    void _paint_qr() {
+            AW_PROFILE_SCOPE("draw_qr");
+            aw_decoder_init(&_decoder, SLocal::Receiver, &_local);
+            int qr_res = aw_draw_qr(&_decoder);
+            assert(qr_res == 0);
+
             img_data.data = (uint8_t *)_local.res.data();
             img_data.data_size = img_data.header.w * img_data.header.h * 2;
             img_data.header.cf = LV_IMG_CF_TRUE_COLOR;
