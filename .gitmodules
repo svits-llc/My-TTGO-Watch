@@ -2,5 +2,5 @@
 	path = astute.arena
 	url = git@github.com:svits-llc/astute.arena.git
 [submodule "astute-compression"]
-	path = astute-compression
+	path = Watch.2/lib/astute-compression
 	url = git@github.com:svits-llc/astute-compression.git
